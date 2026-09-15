@@ -1,0 +1,41 @@
+# ox deploy manifest for oxzoo-go-react.
+# nginx serves dist/ from the current release with an index.html fallback;
+# only /api and /health proxy to the Go web process.
+
+name = "oxzoo-go-react"
+branch = "main"
+runtime = "go"
+framework = "generic"
+package_manager = ""
+port = 9113
+environment_file = "/etc/ox/apps/oxzoo-go-react.env"
+
+required_packages = ["nodejs", "go"]
+
+[[apt_sources]]
+name = "nodesource"
+url = "https://deb.nodesource.com/node_22.x"
+suite = "nodistro"
+components = ["main"]
+key_url = "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
+
+[frontend]
+dist = "dist"
+api_paths = ["/api", "/health"]
+
+[[processes]]
+name = "web"
+command = "./server -port {port}"
+readiness = "http://127.0.0.1:{port}/health"
+
+[deploy]
+# Two hook lines: compile the Go binary first, then install SPA deps locally
+# (hooks run as the unprivileged project user, so no global installs).
+install = ["go build -o server ./cmd/server", "npm install"]
+build = ["npm", "run", "build"]
+health_url = "http://127.0.0.1:9113/health"
+
+[[domains]]
+name = "go-react.oxzoo.sorv.dev"
+tls = false
+spa = true
