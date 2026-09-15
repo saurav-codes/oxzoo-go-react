@@ -37,5 +37,5 @@ health_url = "http://127.0.0.1:9113/health"
 
 [[domains]]
 name = "go-react.oxzoo.sorv.dev"
-tls = false
+tls = true
 spa = true
