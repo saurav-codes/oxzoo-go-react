@@ -5,10 +5,8 @@
 name = "oxzoo-go-react"
 branch = "main"
 runtime = "go"
-framework = "generic"
 package_manager = ""
 port = 9113
-environment_file = "/etc/ox/projects/oxzoo-go-react.env"
 
 required_packages = ["nodejs", "go"]
 
