@@ -26,7 +26,7 @@ One variable, two paths:
 
 ## Deploy with ox
 
-1. Add the repo in the ox dashboard: paste the clone URL `https://github.com/saurav-codes/oxzoo-go-react.git`.
+1. Add the repo in the ox dashboard: paste the clone URL `git@github.com:saurav-codes/oxzoo-go-react.git`.
 2. In the Environment editor, set `GREETING_TAG` (for example `v1`).
 3. Press **Deploy**. ox runs `go build -o server ./cmd/server` and `npm install`, then `npm run build`, starts `./server -port 9113`, and waits for `http://127.0.0.1:9113/health` to return `ok`.
 
