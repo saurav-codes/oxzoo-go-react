@@ -24,6 +24,7 @@ api_paths = ["/api", "/health"]
 [[processes]]
 name = "web"
 command = "./server -port {port}"
+depends_on = ["postgres", "redis"]
 readiness = "http://127.0.0.1:{port}/health"
 
 [deploy]
@@ -31,7 +32,15 @@ readiness = "http://127.0.0.1:{port}/health"
 # (hooks run as the unprivileged project user, so no global installs).
 install = ["go build -o server ./cmd/server", "npm install"]
 build = ["npm", "run", "build"]
+migrate = ["go run ./cmd/migrate"]
 health_url = "http://127.0.0.1:9113/health"
+
+# postgres backs /api/stats (greeting_log row counts), redis backs /api/visits.
+[[services]]
+id = "postgres@17"
+
+[[services]]
+id = "redis@7"
 
 [[domains]]
 name = "go-react.oxzoo.sorv.dev"

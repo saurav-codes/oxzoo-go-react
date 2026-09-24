@@ -7,9 +7,19 @@ An official ox deploy example: a Go API built with the standard library only, fr
 | Layer | Tool | Role |
 |---|---|---|
 | Frontend | React 18 + Vite 5 | SPA built to `dist/`, served by nginx |
-| API | Go stdlib `net/http` | `GET /api/greeting` and `GET /health`, binds `127.0.0.1:9113` |
+| API | Go stdlib `net/http` | `GET /api/greeting`, `/api/stats`, `/api/visits`, `GET /health`, binds `127.0.0.1:9113` |
 | Package manager | npm | lockfile (`package-lock.json`) is committed |
 | Deploy | ox | `ox.toml` defines processes, frontend, domain |
+| Services | postgres@17, redis@7 | declared in `ox.toml` `[[services]]` |
+
+## Services
+
+Two ox catalog services back the API; their credentials arrive as env keys the deploy injects automatically:
+
+- **postgres** — `DATABASE_URL` (driver: pgx v5). Every `GET /api/greeting` hit inserts one row into `greeting_log`; `GET /api/stats` returns its row count. The schema is applied by `cmd/migrate`, which runs the embedded `migrations/*.sql` files idempotently via a `schema_migrations` ledger (`migrate` hook: `go run ./cmd/migrate`; no golang-migrate CLI to download).
+- **redis** — `REDIS_URL` (driver: go-redis v9). `GET /api/visits` atomically increments `oxzoo:visits` and sets a 1-hour TTL on the first hit, so the counter resets itself.
+
+Both are read via `DATABASE_URL`/`REDIS_URL` only, with local-dev fallbacks in `cmd/server/main.go` and `cmd/migrate/main.go`. Never split them into `DATABASE_*`-style keys.
 
 ## Environment flow
 
@@ -28,7 +38,7 @@ One variable, two paths:
 
 1. Add the repo in the ox dashboard: paste the clone URL `git@github.com:saurav-codes/oxzoo-go-react.git`.
 2. In the Environment editor, set `GREETING_TAG` (for example `v1`).
-3. Press **Deploy**. ox runs `go build -o server ./cmd/server` and `npm install`, then `npm run build`, starts `./server -port 9113`, and waits for `http://127.0.0.1:9113/health` to return `ok`.
+3. Press **Deploy**. ox runs `go build -o server ./cmd/server` and `npm install`, then `npm run build`, applies the embedded migrations (`go run ./cmd/migrate`, with a pre-migrate database dump), starts `./server -port 9113`, and waits for `http://127.0.0.1:9113/health` to return `ok`.
 
 ## Expected output
 
