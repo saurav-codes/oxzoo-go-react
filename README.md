@@ -1,6 +1,8 @@
 # oxzoo-go-react
 
-An official ox deploy example: a Go API built with the standard library only, fronted by a React 18 single-page app built with Vite 5, deployed to a single Ubuntu VPS by the [ox](https://github.com/saurav-codes/vps-ctl) control plane from one `ox.toml` manifest at the repo root. ox runs the install and build steps, starts the compiled `server` binary as a systemd process, and configures nginx to serve the built `dist/` folder statically while proxying only `/api` and `/health` to the Go process.
+Deployed with [ox](https://deploywithox.com): deploy a repo to your own server with one command, no Docker. [Docs](https://deploywithox.com/docs) · [Stack guides](https://deploywithox.com/docs/guides)
+
+An official ox deploy example: a Go API built with the standard library only, fronted by a React 18 single-page app built with Vite 5, deployed to a single Ubuntu VPS by the [ox](https://deploywithox.com) control plane from one `ox.toml` manifest at the repo root. ox runs the install and build steps, starts the compiled `server` binary as a systemd process, and configures nginx to serve the built `dist/` folder statically while proxying only `/api` and `/health` to the Go process.
 
 ## Stack
 
