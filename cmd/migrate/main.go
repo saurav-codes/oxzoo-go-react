@@ -27,7 +27,7 @@ func main() {
 
 func run(ctx context.Context) error {
 	// ox injects DATABASE_URL from the postgres service; the fallback keeps
-	// local `go run ./cmd/migrate` usable without the dashboard env editor.
+	// local `go run ./cmd/migrate` usable on a dev machine.
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgres://postgres@127.0.0.1:5432/oxzoo_go_react"

@@ -2,49 +2,91 @@
 
 Deployed with [ox](https://deploywithox.com): deploy a repo to your own server with one command, no Docker. [Docs](https://deploywithox.com/docs) · [Stack guides](https://deploywithox.com/docs/guides)
 
-An official ox deploy example: a Go API built with the standard library only, fronted by a React 18 single-page app built with Vite 5, deployed to a single Ubuntu VPS by the [ox](https://deploywithox.com) control plane from one `ox.toml` manifest at the repo root. ox runs the install and build steps, starts the compiled `server` binary as a systemd process, and configures nginx to serve the built `dist/` folder statically while proxying only `/api` and `/health` to the Go process.
+An [ox](https://deploywithox.com) deploy example: a Go API built with the standard library, with a React 18 SPA built by Vite 5, deployed to your own Ubuntu server. ox compiles the Go binary, builds the SPA, runs the migrations, starts the binary under systemd, and Caddy serves `dist/` while sending only `/api` and `/health` to the Go process.
 
 ## Stack
 
 | Layer | Tool | Role |
 |---|---|---|
-| Frontend | React 18 + Vite 5 | SPA built to `dist/`, served by nginx |
-| API | Go stdlib `net/http` | `GET /api/greeting`, `/api/stats`, `/api/visits`, `GET /health`, binds `127.0.0.1:9113` |
-| Package manager | npm | lockfile (`package-lock.json`) is committed |
-| Deploy | ox | `ox.toml` defines processes, frontend, domain |
-| Services | postgres@17, redis@7 | declared in `ox.toml` `[[services]]` |
+| Frontend | React 18 + Vite 5 | SPA built to `dist/` |
+| API | Go stdlib `net/http` (Go 1.25 from `go.mod`) | `/api/greeting`, `/api/stats`, `/api/visits`, `/health` |
+| Database | pgx v5, go-redis v9 | |
+| Services | PostgreSQL 18, Redis 8 | provided by ox from `[services]` |
+
+## ox.toml
+
+```toml
+# Go API with postgres + redis, a migration command, and a React SPA.
+
+[app]
+start  = "./server -port $PORT"
+health = "/health"
+
+[static]
+dir = "dist"
+spa = true
+api = ["/api", "/health"]
+
+[build]
+commands = ["go build -o server ./cmd/server", "npm run build"]
+migrate  = "go run ./cmd/migrate"
+
+[services]
+postgres = {}
+redis    = {}
+
+[tools]
+node = "24"
+```
+
+The repo has two languages, so `[build] commands` names both builds. `[build] migrate` runs before traffic switches, and ox snapshots the database first.
 
 ## Services
 
-Two ox catalog services back the API; their credentials arrive as env keys the deploy injects automatically:
-
-- **postgres** — `DATABASE_URL` (driver: pgx v5). Every `GET /api/greeting` hit inserts one row into `greeting_log`; `GET /api/stats` returns its row count. The schema is applied by `cmd/migrate`, which runs the embedded `migrations/*.sql` files idempotently via a `schema_migrations` ledger (`migrate` hook: `go run ./cmd/migrate`; no golang-migrate CLI to download).
-- **redis** — `REDIS_URL` (driver: go-redis v9). `GET /api/visits` atomically increments `oxzoo:visits` and sets a 1-hour TTL on the first hit, so the counter resets itself.
-
-Both are read via `DATABASE_URL`/`REDIS_URL` only, with local-dev fallbacks in `cmd/server/main.go` and `cmd/migrate/main.go`. Never split them into `DATABASE_*`-style keys.
+- **postgres:** `DATABASE_URL`. Every `GET /api/greeting` inserts one row into `greeting_log`; `GET /api/stats` returns its row count. `cmd/migrate` applies the embedded `migrations/*.sql` files once each, tracked in a `schema_migrations` table.
+- **redis:** `REDIS_URL`. `GET /api/visits` increments `oxzoo:visits` and sets a one-hour TTL on the first hit.
 
 ## Environment flow
 
-One variable, two paths:
-
-**`GREETING_TAG`**
-
-- **Runtime path (API):** `cmd/server/main.go` reads `os.Getenv("GREETING_TAG")` on every request to `GET /api/greeting`. A restart with a new value is enough to change it.
-- **Build-time path (SPA):** `vite.config.js` sets `envPrefix: ["GREETING_", "VITE_"]`, so any `GREETING_*` variable in the build environment is exposed to `import.meta.env`. `client/src/App.jsx` renders `import.meta.env.GREETING_TAG` inside one template literal, which is baked into the bundle during `npm run build`. No duplicated `VITE_GREETING_TAG` is needed.
-
-**The deploy compiles Go first (`go build -o server ./cmd/server`), then installs and builds the SPA (`npm install`, `npm run build`).** nginx serves `dist/` from the current release and proxies `/api` and `/health` to the Go process on `127.0.0.1:9113`.
-
-**Set `GREETING_TAG` in the ox Environment editor BEFORE the first deploy.** The SPA value is baked during the deploy build step, so changing it later requires a redeploy; the API value updates as soon as the process restarts. `.env.example` documents the variable with a placeholder; real values live in the ox dashboard, never in git.
+- **Run time (API):** `cmd/server/main.go` reads `GREETING_TAG` on every request to `/api/greeting`.
+- **Build time (SPA):** `vite.config.js` sets `envPrefix: ["GREETING_", "VITE_"]`, so `client/src/App.jsx` gets `import.meta.env.GREETING_TAG`, baked into the bundle by `npm run build`. ox sets your variables before the build, and changing one with `ox vars set` redeploys, which rebuilds the SPA.
 
 ## Deploy with ox
 
-1. Add the repo in the ox dashboard: paste the clone URL `git@github.com:saurav-codes/oxzoo-go-react.git`.
-2. In the Environment editor, set `GREETING_TAG` (for example `v1`).
-3. Press **Deploy**. ox runs `go build -o server ./cmd/server` and `npm install`, then `npm run build`, applies the embedded migrations (`go run ./cmd/migrate`, with a pre-migrate database dump), starts `./server -port 9113`, and waits for `http://127.0.0.1:9113/health` to return `ok`.
+```sh
+curl -fsSL https://deploywithox.com/install.sh | sh
+ox login
+ox new https://github.com/saurav-codes/oxzoo-go-react
+printf 'GREETING_TAG=demo\n' | ox review oxzoo-go-react --from-file - --wait
+```
+
+The plan, offline:
+
+```console
+$ ox check .
+ox check . (manifest: ox.toml)
+
+  app.start                  ./server -port $PORT                                 declared
+  app.health                 /health                                              declared
+  static.dir                 dist                                                 declared
+  static.spa                 true                                                 declared
+  static.api                 /api, /health                                        declared
+  build.install              npm ci                                               detected:package-lock.json
+  build.commands[0]          go build -o server ./cmd/server                      declared
+  build.commands[1]          npm run build                                        declared
+  build.migrate              go run ./cmd/migrate                                 declared
+  tools.go                   1.25.0                                               detected:go.mod
+  tools.node                 24                                                   declared
+  services.postgres          postgres 18 (shared)                                 default
+  services.redis             redis 8 (only for this project)                      default
+
+  Provided by ox: PORT, HOST, OX_ENV, OX_PROJECT, OX_RELEASE, OX_DATA_DIR, PUBLIC_URL, PUBLIC_HOST, DATABASE_URL, REDIS_URL
+  Set on the dashboard before the first deploy: GREETING_TAG
+
+Ready to deploy.
+```
 
 ## Expected output
-
-Visiting the domain shows the project heading plus the two labeled lines:
 
 ```
 oxzoo-go-react
@@ -52,4 +94,12 @@ frontend: hello world oxzoo-go-react_<GREETING_TAG>
 backend: hello world oxzoo-go-react_<GREETING_TAG>
 ```
 
-The `frontend:` line is baked into the SPA at build time; the `backend:` line is fetched live from `GET /api/greeting` at runtime. Both come from the same `GREETING_TAG` set in the ox dashboard.
+The `frontend:` line is baked into the SPA; the `backend:` line comes from `GET /api/greeting`.
+
+## Local development
+
+```sh
+npm install && GREETING_TAG=dev npm run build
+go run ./cmd/migrate                    # needs a local PostgreSQL, or export DATABASE_URL
+GREETING_TAG=dev go run ./cmd/server -port 9113
+```

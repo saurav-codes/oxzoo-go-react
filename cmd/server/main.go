@@ -20,7 +20,7 @@ func main() {
 	ctx := context.Background()
 
 	// ox injects DATABASE_URL/REDIS_URL from the declared services; the
-	// fallbacks keep local `go run` usable without the dashboard env editor.
+	// fallbacks keep local `go run` usable on a dev machine.
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgres://postgres@127.0.0.1:5432/oxzoo_go_react"
